@@ -7,7 +7,7 @@ Document::Document(string id) : _id(id)
 { // _id = id
 }
 
-void Document::addField(const string &key, const string &value)
+void Document::addField(const string &key, const string &value) // добавление файла
 {
     for (size_t i = 0; i < keys.getSize(); i++)
     {
@@ -20,8 +20,8 @@ void Document::addField(const string &key, const string &value)
     keys.push(key);
     values.push(value);
 }
-bool Document::getField(const string &key, string &out) const
-{ // проверка на наличие ключа
+bool Document::getField(const string &key, string &out) const // ищем значение по ключу
+{                                                             // проверка на наличие ключа
     for (size_t i = 0; i < keys.getSize(); i++)
     {
         if (keys[i] == key)
@@ -33,10 +33,11 @@ bool Document::getField(const string &key, string &out) const
     return false;
 }
 
-string Document::serialize() const
+string Document::serialize() const // создание json
 {
     string json = "{";
     json += "\"_id\":\"" + _id + "\"";
+
     for (size_t i = 0; i < keys.getSize(); i++)
     { // проверка ключ ли id
         if (keys[i] == "_id")
@@ -46,7 +47,8 @@ string Document::serialize() const
     json += "}";
     return json;
 }
-Document *Document::deserialize(const std::string &json_line)
+
+Document *Document::deserialize(const std::string &json_line) // мини парсер
 {
     string s = trim(json_line); // очищаем строку
     if (s.size() < 2 || s.front() != '{' || s.back() != '}')
@@ -133,7 +135,6 @@ Document *Document::deserialize(const std::string &json_line)
 
         if (key == "_id")
         {
-
             if (doc->_id.empty())
             {
                 doc->_id = value;
@@ -144,6 +145,7 @@ Document *Document::deserialize(const std::string &json_line)
             doc->addField(key, value);
         }
     }
+
     if (doc->_id.empty())
     {
         delete doc;

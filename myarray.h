@@ -7,7 +7,7 @@ class myarray
 private:
     std::string *data;
     size_t capacity;
-    size_t size; // занято
+    size_t size; // занятоe
 
     void resize(size_t new_capacity);
 

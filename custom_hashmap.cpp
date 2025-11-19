@@ -17,7 +17,7 @@ CustomList::~CustomList()
         current = next;
     }
 }
-ListNode *CustomList::find(const std::string &key) const
+ListNode *CustomList::find(const ::string &key) const
 {
     ListNode *current = head;
     while (current)
@@ -30,7 +30,7 @@ ListNode *CustomList::find(const std::string &key) const
     }
     return nullptr;
 }
-Document *CustomList::remove(const std::string &key)
+Document *CustomList::remove(const ::string &key)
 {
     ListNode *current = head;
     ListNode *prev = nullptr;
@@ -49,7 +49,7 @@ Document *CustomList::remove(const std::string &key)
             }
 
             Document *removed_value = current->value;
-            current->value = nullptr; // Узел больше не владеет документом
+            current->value = nullptr;
             delete current;
             return removed_value;
         }
@@ -85,7 +85,7 @@ CustomHashMap::~CustomHashMap()
     delete[] buckets;
 }
 
-size_t CustomHashMap::_hash(const std::string &key) const
+size_t CustomHashMap::_hash(const ::string &key) const
 { // вычисление индекса
     size_t hash_value = 0;
     unsigned int prime = 31;
@@ -125,7 +125,7 @@ void CustomHashMap::resize_rehash()
     delete[] old_buckets; // удаление старыъ
 }
 
-void CustomHashMap::put(const std::string &key, Document *value, bool delete_on_update)
+void CustomHashMap::put(const ::string &key, Document *value, bool delete_on_update)
 {
     string cleaned_key = trim(key);
     if ((float)size / capacity >= LOAD_FACTOR)
@@ -154,7 +154,7 @@ void CustomHashMap::put(const std::string &key, Document *value, bool delete_on_
     }
 }
 
-Document *CustomHashMap::get(const std::string &key) const
+Document *CustomHashMap::get(const ::string &key) const
 {
     string cleaned_key = trim(key);
     size_t index = _hash(cleaned_key);
@@ -169,7 +169,7 @@ Document *CustomHashMap::get(const std::string &key) const
     }
 }
 
-Document *CustomHashMap::remove(const std::string &key)
+Document *CustomHashMap::remove(const ::string &key)
 {
     string cleaned_key = trim(key);
     size_t index = _hash(cleaned_key);

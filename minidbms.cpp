@@ -2,7 +2,6 @@
 #include "minidbms.h"
 #include "document.h"
 #include <fstream>
-#include <iostream>
 #include <filesystem>
 #include <sstream>
 
@@ -31,7 +30,7 @@ void MiniDBMS::load()
     if (!file.is_open())
     {
         // файла нет — начинаем с пустой базы
-        cout << "INFO: Файл коллекции не найден. Новая база." << endl;
+        cout << " Файл коллекции не найден. Новая база." << endl;
         next_id = 1;
         return;
     }
@@ -56,7 +55,7 @@ void MiniDBMS::load()
 
     if (s.front() != '[' || s.back() != ']')
     {
-        cerr << "ERROR: Некорректный формат файла (ожидался JSON-массив)." << endl;
+        cerr << "Некорректный формат файла (ожидался JSON-массив)." << endl;
         next_id = 1;
         return;
     }
@@ -69,12 +68,7 @@ void MiniDBMS::load()
     while (pos < content.size())
     {
         // пропускаем пробелы, табы, переводы строк, запятые
-        while (pos < content.size() &&
-               (content[pos] == ' ' ||
-                content[pos] == '\t' ||
-                content[pos] == '\n' ||
-                content[pos] == '\r' ||
-                content[pos] == ','))
+        while (pos < content.size() && content[pos] == ' ' || content[pos] == '\t' || content[pos] == '\n' || content[pos] == '\r' || content[pos] == ',')
         {
             ++pos;
         }
@@ -83,7 +77,7 @@ void MiniDBMS::load()
 
         if (content[pos] != '{')
         {
-            cerr << "ERROR: Ожидался '{' при разборе массива документов." << endl;
+            cerr << "Ожидался '{' при разборе массива документов." << endl;
             break;
         }
 
@@ -115,6 +109,7 @@ void MiniDBMS::load()
             break;
         }
 
+        // вырезаем одну строку
         string obj_str = content.substr(start_obj, pos - start_obj);
         obj_str = trim(obj_str);
         if (obj_str.empty())
@@ -160,6 +155,7 @@ void MiniDBMS::save() const
 
     bool first = true;
 
+    // проход по все бакетам
     for (size_t i = 0; i < data_store.getCapacity(); i++)
     {
         ListNode *current = data_store.getBucketHead(i);
@@ -241,9 +237,10 @@ bool MiniDBMS::like_match(const string &value, const string &pattern)
 // сравниваем одно поле с одним из условий
 bool MiniDBMS::match_query_value(const string &doc_value_raw, const string &query_value_obj)
 {
-    string doc_value = trim(doc_value_raw);
-    string trimmed_query = trim(query_value_obj);
+    string doc_value = trim(doc_value_raw);       // строковое значение
+    string trimmed_query = trim(query_value_obj); // строка с условием
 
+    // постой случай
     if (trimmed_query.empty())
         return false;
     if (trimmed_query.front() != '{')
@@ -270,10 +267,11 @@ bool MiniDBMS::match_query_value(const string &doc_value_raw, const string &quer
 
         return doc_value == trimmed_query;
     }
-    auto extract_operator_value = [&](const string &op_key) -> string
+    // сложный случай
+    auto extract_operator_value = [&](const string &op_key) -> string // лямда функция
     {
         string op_search = "\"" + op_key + "\":";
-        size_t pos = trimmed_query.find(op_search);
+        size_t pos = trimmed_query.find(op_search); // поиск оператора
         if (pos == string::npos)
             return "";
 
@@ -289,8 +287,7 @@ bool MiniDBMS::match_query_value(const string &doc_value_raw, const string &quer
             size_t end_content = trimmed_query.find('"', start_content);
             if (end_content == string::npos)
                 return "";
-            return trim(trimmed_query.substr(start_content,
-                                             end_content - start_content));
+            return trim(trimmed_query.substr(start_content, end_content - start_content));
         }
         else
         {
@@ -453,7 +450,7 @@ bool MiniDBMS::match_query_value(const string &doc_value_raw, const string &quer
     if (!has_any_operator)
     {
         // В объекте нет ни одного из известных операторов –
-        // считаем, что условие не поддерживается.
+
         return false;
     }
 
@@ -477,28 +474,26 @@ bool MiniDBMS::match_and_query(const Document *doc, const string &query_json)
     while (current_pos < content.length())
     {
         // пропускаем пробелы, табы и запятые
-        while (current_pos < content.length() &&
-               (content[current_pos] == ' ' ||
-                content[current_pos] == '\t' ||
-                content[current_pos] == ','))
+        while (current_pos < content.length() && content[current_pos] == ' ' || content[current_pos] == '\t' || content[current_pos] == ',')
         {
             current_pos++;
         }
         if (current_pos >= content.length())
             break;
 
-        // ---- парсим имя поля ----
+        // парсим имя поля value(city)
         size_t start_key = content.find('"', current_pos);
         if (start_key == string::npos)
-            break; // больше нет полей
+            break;
 
         size_t end_key = content.find('"', start_key + 1);
         if (end_key == string::npos)
-            return false; // кривой JSON
+            return false; // кривой JSON "name":
 
         string field_name = content.substr(start_key + 1, end_key - start_key - 1);
 
-        // ---- ищем начало значения ----
+        // ищем начало этого значения
+
         size_t start_val_search = content.find(':', end_key);
         if (start_val_search == string::npos)
             return false;
@@ -507,7 +502,7 @@ bool MiniDBMS::match_and_query(const Document *doc, const string &query_json)
         if (val_start_char == string::npos)
             return false;
 
-        // ---- определяем конец значения ----
+        // определяем конец значения
         size_t end_val = string::npos;
         char first_char = content[val_start_char];
 
@@ -567,11 +562,11 @@ bool MiniDBMS::match_and_query(const Document *doc, const string &query_json)
         if (end_val == string::npos || end_val < val_start_char)
             return false;
 
-        // ---- само значение условия ----
+        // само значение условия
         size_t length = end_val - val_start_char + 1;
         string condition_value = content.substr(val_start_char, length);
 
-        // ---- достаём значение поля из документа ----
+        // ---- достаём значение поля из документа
         string doc_value_raw;
         if (field_name == "_id")
         {
@@ -616,8 +611,7 @@ bool MiniDBMS::handle_or_query(const Document *doc, const string &query_json)
     if (array_end == string::npos || array_end < array_start)
         return false;
 
-    string array_content =
-        query_json.substr(array_start + 1, array_end - array_start - 1);
+    string array_content = query_json.substr(array_start + 1, array_end - array_start - 1); // убираем скобки
 
     size_t current_pos = 0;
     bool has_any_condition = false;
@@ -691,8 +685,7 @@ bool MiniDBMS::handle_and_query(const Document *doc, const string &query_json)
     if (array_end == string::npos || array_end < array_start)
         return false;
 
-    string array_content =
-        query_json.substr(array_start + 1, array_end - array_start - 1);
+    string array_content = query_json.substr(array_start + 1, array_end - array_start - 1); // чистим скобки
 
     size_t current_pos = 0;
     bool has_any_condition = false;
@@ -726,11 +719,10 @@ bool MiniDBMS::handle_and_query(const Document *doc, const string &query_json)
         if (!found_end)
             return false;
 
-        string sub_query =
-            array_content.substr(start_cond, end_cond - start_cond + 1);
+        string sub_query = array_content.substr(start_cond, end_cond - start_cond + 1);
         has_any_condition = true;
 
-        // для $and нужно, чтобы КАЖДОЕ подусловие было true
+        // КАЖДОЕ подусловие было true
         if (!match_document(doc, trim(sub_query)))
         {
             return false;
@@ -739,21 +731,21 @@ bool MiniDBMS::handle_and_query(const Document *doc, const string &query_json)
         current_pos = end_cond + 1;
     }
 
-    // Если не было ни одного условия — считаем, что документ не подходит
+    // Если не было считаем что документ не подходит
     if (!has_any_condition)
         return false;
 
     return true;
 }
 
-// финальная функция: решает, как именно интерпретировать запрос
+// решает как вывести
 bool MiniDBMS::match_document(const Document *doc, const string &query_json)
 {
     string query = trim(query_json);
     if (query.empty() || query == "{}")
         return true;
 
-    // если это объект, посмотрим на первый ключ
+    // если это объект смотрим на первый ключ
     if (!query.empty() && query.front() == '{')
     {
         size_t first_quote = query.find('"');
@@ -762,9 +754,7 @@ bool MiniDBMS::match_document(const Document *doc, const string &query_json)
             size_t second_quote = query.find('"', first_quote + 1);
             if (second_quote != string::npos)
             {
-                string first_key =
-                    query.substr(first_quote + 1,
-                                 second_quote - first_quote - 1);
+                string first_key = query.substr(first_quote + 1, second_quote - first_quote - 1);
 
                 if (first_key == "$or")
                 {
@@ -778,7 +768,7 @@ bool MiniDBMS::match_document(const Document *doc, const string &query_json)
         }
     }
 
-    // по умолчанию — неявный AND по полям объекта
+    // по умолчанию — неявный AND
     return match_and_query(doc, query);
 }
 
@@ -790,12 +780,12 @@ void MiniDBMS::handle_insert(const string &query_json)
     string trimmed = trim(query_json);
     if (trimmed.empty())
     {
-        cerr << "ERROR: Empty insert JSON." << endl;
+        cerr << "ERROR: пустая вставка" << endl;
         return;
     }
     if (trimmed.front() != '{')
     {
-        cerr << "ERROR: Insert JSON must be an object: " << trimmed << endl;
+        cerr << "ERROR: не правильнный ввод " << trimmed << endl;
         return;
     }
 
@@ -806,7 +796,7 @@ void MiniDBMS::handle_insert(const string &query_json)
     Document *new_doc = Document::deserialize(full_json);
     if (!new_doc)
     {
-        cerr << "ERROR: Failed to parse insert document." << endl;
+        cerr << "ERROR: проблема с файлом." << endl;
         return;
     }
 
@@ -873,7 +863,7 @@ void MiniDBMS::handle_delete(const string &query_json)
         }
     }
 
-    cout << "Документ удален" << deleted_count << endl;
+    cout << "Документ удален " << deleted_count << endl;
 }
 
 void MiniDBMS::run(const string &command, const string &query_json)

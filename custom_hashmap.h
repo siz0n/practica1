@@ -29,7 +29,7 @@ private:
     size_t size;
 
     static const size_t DEFAULT_CAPACITY = 16;
-    static constexpr float LOAD_FACTOR = 0.75f; // 16:12
+    static constexpr float LOAD_FACTOR = 0.75f;
 
     size_t _hash(const std::string &key) const;
     void resize_rehash();

@@ -1,8 +1,0 @@
-[
-{"_id":"1","name":"Alice","age":"25","city":"London"},
-{"_id":"2","name":"Bob","age":"19","city":"Paris"},
-{"_id":"3","name":"Charlie","age":"30","city":"London"},
-{"_id":"4","name":"Alex","age":"22","city":"Berlin"},
-{"_id":"5","name":"Alina","age":"27","city":"Rome"},
-{"_id":"6","name":"Denis","age":"19","city":"London"}
-]

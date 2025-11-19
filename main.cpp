@@ -26,14 +26,6 @@ int main(int argc, char *argv[])
     string command = argv[2];
     string query_json = argv[3];
 
-    // Если JSON обёрнут в одинарные кавычки '...'
-    if (query_json.length() >= 2 &&
-        query_json.front() == '\'' &&
-        query_json.back() == '\'')
-    {
-        query_json = query_json.substr(1, query_json.length() - 2);
-    }
-
     MiniDBMS dbms(db_name);
     dbms.run(command, query_json);
 

@@ -12,18 +12,16 @@
 #include "utills.h"
 
 
-// to-lower для команд
-static std::string toLower(const std::string& s)
+static std::string toLower(const std::string& s) // приведение строки к нижнему регистру
 {
     std::string res = s;
-    std::transform(res.begin(), res.end(), res.begin(),
-                   [](unsigned char c)
+    std::transform(res.begin(), res.end(), res.begin(), [](unsigned char c)
                    { return static_cast<char>(std::tolower(c)); });
     return res;
 }
 
-// экранирование строки для JSON (" \ \n ...)
-static std::string escapeJsonString(const std::string& s)
+
+static std::string escapeJsonString(const std::string& s) // безопасная вставка строки в JSON
 {
     std::string result;
     result.reserve(s.size() + 16);
@@ -96,54 +94,19 @@ bool readLine(int sock, std::string& out)
     return true;
 }
 
-// ----------------------------
-// Парсинг команд пользователя
-// ----------------------------
-//
-// Форматы (вводишь в клиенте):
-//   INSERT { ...json объекта... }
-//   FIND   { ...json условия... }
-//   DELETE { ...json условия... }
-//
-// database берётся из параметра --database
-//
-// На выходе: готовая JSON-строка запроса для сервера.
-//
-// Примеры:
-//
-//   INSERT {"name":"Alice","age":25}
-//
-//  -> {"database":"mydb","operation":"insert",
-//      "data":[{"name":"Alice","age":25}],
-//      "query":{}}
-//
-//   FIND {"age":{"$gt":20}}
-//
-//  -> {"database":"mydb","operation":"find",
-//      "data":[],
-//      "query":{"age":{"$gt":20}}}
-//
-static bool buildJsonRequestFromCommand(const std::string& line,
-                                        const std::string& database,
-                                        std::string& outJson)
+static bool buildJsonRequestFromCommand(const std::string& line, const std::string& database, std::string& outJson) // построение JSON-запроса из команды пользователя
 {
-    std::string trimmed = trim(line);
+    std::string trimmed = trim(line); // убираем пробелы
     if (trimmed.empty())
     {
         return false;
     }
 
-    // первый токен — команда (insert/find/delete)
-    std::size_t spacePos = trimmed.find(' ');
-    std::string cmd = (spacePos == std::string::npos)
-                          ? trimmed
-                          : trimmed.substr(0, spacePos);
-    std::string rest =
-        (spacePos == std::string::npos)
-            ? std::string()
-            : trim(trimmed.substr(spacePos + 1));
-
-    std::string op = toLower(cmd); // insert/find/delete
+    
+    std::size_t spacePos = trimmed.find(' '); // ищем пробел
+    std::string cmd = (spacePos == std::string::npos)  ? trimmed : trimmed.substr(0, spacePos); // команда
+    std::string rest = (spacePos == std::string::npos ? std::string() : trim(trimmed.substr(spacePos + 1))); // остальная часть
+    std::string op = toLower(cmd); // приводим к индексу
 
     if (op != "insert" && op != "find" && op != "delete")
     {
@@ -152,19 +115,18 @@ static bool buildJsonRequestFromCommand(const std::string& line,
         return false;
     }
 
-    // Для find/delete, если условия нет — считаем "{}"
+    // Для find/delete, если условия нет - считаем "{}"
     std::string queryJson = "{}";
     if (op == "find" || op == "delete")
     {
         if (!rest.empty())
         {
-            queryJson = rest; // предполагается, что это валидный JSON-объект
+            queryJson = rest; // присваем напрямую
         }
     }
 
-    // Для insert:
-    //  rest должен быть либо { ... } (один документ), либо [ {...}, {...} ] (массив).
-    //  Мы всё равно оборачиваем один объект в массив.
+
+    //  rest должен быть либо (один документ), либо (массив).
     std::string dataJson = "[]";
     if (op == "insert")
     {
@@ -185,18 +147,13 @@ static bool buildJsonRequestFromCommand(const std::string& line,
             dataJson = "[" + rest + "]";
         }
 
-        queryJson = "{}"; // для insert фильтр не нужен
+        queryJson = "{}"; 
     }
 
     // Собираем JSON-запрос:
-    // {
-    //   "database": "<db>",
-    //   "operation": "insert"|"find"|"delete",
-    //   "data": [...],
-    //   "query": {...}
     // }
     std::string json;
-    json.reserve(256 + dataJson.size() + queryJson.size());
+    json.reserve(256 + dataJson.size() + queryJson.size()); // выделяем память
 
     json += "{";
     json += "\"database\":\"";
@@ -223,18 +180,13 @@ static bool buildJsonRequestFromCommand(const std::string& line,
 
 int main(int argc, char* argv[])
 {
-    // значения по умолчанию
-    std::string host = "127.0.0.1";
-    int port = 5000;
+    std::string host;
+    int port;
     std::string database = "mydb";
     std::string onceCommand;
-    bool onceMode = false;
+    bool onceMode = false; // режим одного запроса
 
-    // простой парсер аргументов:
-    //   --host <host>
-    //   --port <port>
-    //   --database <name>
-    //   --once "<command>"
+ 
     for (int i = 1; i < argc; ++i)
     {
         std::string arg = argv[i];
@@ -256,25 +208,9 @@ int main(int argc, char* argv[])
             onceMode = true;
             onceCommand = argv[++i];
         }
-        else if (arg == "--help" || arg == "-h")
-        {
-            std::cout << "Usage: " << argv[0]
-                      << " --host <host> --port <port> --database <name>"
-                      << " [--once \"COMMAND\"]\n\n"
-                      << "Examples (interactive):\n"
-                      << "  INSERT {\"name\":\"Alice\",\"age\":25}\n"
-                      << "  FIND   {\"age\":{\"$gt\":20}}\n"
-                      << "  DELETE {\"name\":\"Alice\"}\n\n"
-                      << "One-shot example:\n"
-                      << "  " << argv[0]
-                      << " --host 127.0.0.1 --port 5555 --database mydb \\\n"
-                      << "     --once \"FIND {\\\"age\\\":{\\\"$gt\\\":20}}\"\n";
-            return 0;
-        }
         else
         {
-            std::cerr << "Unknown or incomplete argument: " << arg << "\n";
-            std::cerr << "Use --help for usage.\n";
+            std::cerr << "Неизвестный аргумент: " << arg << "\n";
             return 1;
         }
     }
@@ -289,7 +225,7 @@ int main(int argc, char* argv[])
 
     // настраиваем адрес сервера
     sockaddr_in addr{};
-    addr.sin_family = AF_INET;
+    addr.sin_family = AF_INET; //
     addr.sin_port = htons(static_cast<uint16_t>(port));
 
     // допускаем и IP, и "localhost"
@@ -298,7 +234,7 @@ int main(int argc, char* argv[])
         host = "127.0.0.1";
     }
 
-    if (inet_pton(AF_INET, host.c_str(), &addr.sin_addr) <= 0)
+    if (inet_pton(AF_INET, host.c_str(), &addr.sin_addr) <= 0) // преобразуем строку в адрес
     {
         std::cerr << "Invalid host/IP address: " << host << "\n";
         close(sock);
@@ -316,20 +252,18 @@ int main(int argc, char* argv[])
     std::cout << "Connected to " << host << ":" << port
               << " (database: " << database << ")\n";
 
-    // ----------------------------
     // РЕЖИМ ОДНОГО ЗАПРОСА
-    // ----------------------------
     if (onceMode)
     {
-        std::string reqJson;
-        if (!buildJsonRequestFromCommand(onceCommand, database, reqJson))
+        std::string reqJson; // запрос в JSON
+        if (!buildJsonRequestFromCommand(onceCommand, database, reqJson)) 
         {
             std::cerr << "Failed to build request from --once command.\n";
             close(sock);
             return 1;
         }
 
-        if (!writeAll(sock, reqJson))
+        if (!writeAll(sock, reqJson)) // отправляем запрос
         {
             std::cerr << "Send error\n";
             close(sock);
@@ -337,32 +271,30 @@ int main(int argc, char* argv[])
         }
 
         std::string respLine;
-        if (!readLine(sock, respLine))
+        if (!readLine(sock, respLine)) // читаем ответ
         {
             std::cerr << "Disconnected from server\n";
             close(sock);
             return 1;
         }
 
-        std::cout << respLine << "\n";
+        std::cout << respLine << "\n"; // печатаем ответ
         close(sock);
         return 0;
     }
 
-    // ----------------------------
     // ИНТЕРАКТИВНЫЙ РЕЖИМ
-    // ----------------------------
     while (true)
     {
         std::cout << "[" << database << "] > ";
         std::string line;
         if (!std::getline(std::cin, line))
         {
-            break; // EOF / Ctrl+D
+            break; 
         }
 
-        std::string trimmed = trim(line);
-        std::string lowered = toLower(trimmed);
+        std::string trimmed = trim(line); // убираем пробелы
+        std::string lowered = toLower(trimmed); // приводим к нижнему регистру
 
         if (lowered == "exit" || lowered == "quit")
         {
@@ -377,7 +309,6 @@ int main(int argc, char* argv[])
         std::string reqJson;
         if (!buildJsonRequestFromCommand(line, database, reqJson))
         {
-            // ошибка уже вывели в stderr, просто продолжаем
             continue;
         }
 
@@ -395,7 +326,6 @@ int main(int argc, char* argv[])
             return 1;
         }
 
-        // Пока просто печатаем JSON-ответ как есть
         std::cout << respLine << "\n";
     }
 

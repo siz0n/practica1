@@ -25,7 +25,7 @@ string MiniDBMS::get_collection_path() const
     return (db_folder + "/" + db_name + ".json");
 }
 
-void MiniDBMS::load()
+void MiniDBMS::loadFromDisk()
 {
     string path = get_collection_path();
     ifstream file(path);
@@ -147,7 +147,7 @@ void MiniDBMS::load()
          << ". next_id = " << next_id << endl;
 }
 
-void MiniDBMS::save() const
+void MiniDBMS::saveToDisk() 
 {
     string path = get_collection_path();
     ofstream file(path); // открываем для перезаписи
@@ -783,7 +783,7 @@ bool MiniDBMS::match_document(const Document *doc, const string &query_json)
 }
 
 // вставка нового документа
-void MiniDBMS::handle_insert(const string &query_json)
+void MiniDBMS::insertQuery(const string &query_json)
 {
     string new_id = generate_id();
 
@@ -838,9 +838,7 @@ void MiniDBMS::findQueryToStream(const string &query_json, ostream &out)
     out << "Найдено документов: " << found_count << "\n";
 }   
 
-void MiniDBMS::findQueryToJsonArray(const std::string& query_json,
-                                    std::string& out_array_json,
-                                    std::size_t& out_count) 
+void MiniDBMS::findQueryToJsonArray(const string& query_json, string& out_array_json, size_t& out_count) 
 {
     std::string q = trim(query_json);
     if (q.empty())
@@ -926,43 +924,11 @@ void MiniDBMS::handle_delete(const string &query_json)
     cout << "Документ удален:" << deleted_count << endl; 
 }
 
-void MiniDBMS::loadFromDisk(){
-    load();
-}
-
-void MiniDBMS::saveToDisk(){
-    save();
-}
-
-void MiniDBMS::insertQuery(const string &query_json){
-    handle_insert(query_json);
-}
 
 
 
 
-void MiniDBMS::run(const string &command, const string &query_json)
-{
-    // Загружаем состояние базы из файла
-    load();
 
-    if (command == "insert")
-    {
-        handle_insert(query_json);
-    }
-    else if (command == "find")
-    {
-        handle_find(query_json);
-    }
-    else if (command == "delete")
-    {
-        handle_delete(query_json);
-    }
-    else
-    {
-        cerr << "ERROR: Unknown command: " << command << endl;
-    }
 
-    // Сохраняем изменения обратно в файл
-    save();
-}
+
+

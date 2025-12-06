@@ -16,8 +16,6 @@ private:
 
     std::string generate_id();
     std::string get_collection_path() const;
-    void load();
-    void save() const;
 
     bool is_integer_string(const std::string &s);
     bool like_match(const std::string &value, const std::string &pattern);
@@ -28,7 +26,6 @@ private:
     bool handle_and_query(const Document *doc, const std::string &query_json);
     bool match_document(const Document *doc, const std::string &query_json);
 
-    void handle_insert(const std::string &query_json);
     void handle_find(const std::string &query_json);
     void handle_delete(const std::string &query_json);
 

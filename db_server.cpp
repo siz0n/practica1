@@ -15,33 +15,29 @@
 #include <string>
 #include <thread>
 
-// =========================
-// Структура для списка БД
-// =========================
+using namespace std;
 
 struct DbEntry
 {
-    std::string name;   // имя базы
+    string name;   // имя базы
     MiniDBMS* db;       // указатель на объект базы
-    std::mutex mtx;     // мьютекс НА КОНКРЕТНУЮ БД
+    mutex mtx;     // мьютекс НА КОНКРЕТНУЮ БД
     DbEntry* next;      // односвязный список
 };
 
 static DbEntry* g_dbList = nullptr;
-static std::mutex g_dbListMutex;
+static mutex g_dbListMutex;
 
-// =========================
-// Работа с сокетом
-// =========================
+
 
 // чтение строки до '\n'
-static bool readLine(int sock, std::string& out)
+static bool readLine(int sock, string& out)
 {
     out.clear();
-    char ch = 0;
+    char ch = 0; 
     while (true)
     {
-        ssize_t n = ::recv(sock, &ch, 1, 0);
+        ssize_t n = recv(sock, &ch, 1, 0); // читает сокет по 1 байту
         if (n <= 0)
         {
             return false;
@@ -56,95 +52,85 @@ static bool readLine(int sock, std::string& out)
 }
 
 // отправка всей строки
-static bool writeAll(int sock, const std::string& data)
+static bool writeAll(int sock, const string& data)
 {
     const char* buf = data.c_str();
-    std::size_t total = data.size();
-    std::size_t sent = 0;
+    size_t total = data.size();
+    size_t sent = 0; // сколько уже отправлено
 
     while (sent < total)
     {
-        ssize_t n = ::send(sock, buf + sent, total - sent, 0);
+        ssize_t n = send(sock, buf + sent, total - sent, 0);
         if (n <= 0)
         {
             return false;
         }
-        sent += static_cast<std::size_t>(n);
+        sent += static_cast<size_t>(n);
     }
     return true;
 }
 
-// =========================
-// Вспомогательные JSON-функции
-// =========================
 
-// вытащить строковое поле: "key":"value"
-static bool extractJsonStringField(const std::string& json,
-                                   const std::string& key,
-                                   std::string& out)
+// вытащить строковое поле: "key":"value" для работы с клиентом
+static bool extractJsonStringField(const string& json, const string& key, string& out)
 {
-    std::string pattern = "\"" + key + "\"";
-    std::size_t pos = json.find(pattern);
-    if (pos == std::string::npos)
+    string pattern = "\"" + key + "\"";
+    size_t pos = json.find(pattern); // ищем ключ
+    if (pos == string::npos)
     {
         return false;
     }
 
-    std::size_t colon = json.find(':', pos + pattern.size());
-    if (colon == std::string::npos)
+    size_t colon = json.find(':', pos + pattern.size()); // ищем двоеточие
+    if (colon == string::npos)
     {
         return false;
     }
 
-    std::size_t first_quote = json.find('"', colon + 1);
-    if (first_quote == std::string::npos)
+    size_t first_quote = json.find('"', colon + 1); // ищем первую кавычку значения
+    if (first_quote == string::npos)
     {
         return false;
     }
 
-    std::size_t second_quote = json.find('"', first_quote + 1);
-    if (second_quote == std::string::npos)
+    size_t second_quote = json.find('"', first_quote + 1); // ищем вторую кавычку значения
+    if (second_quote == string::npos)
     {
         return false;
     }
 
-    out = json.substr(first_quote + 1,
-                      second_quote - first_quote - 1);
+    out = json.substr(first_quote + 1, second_quote - first_quote - 1);// вынимаем значение между кавычками
     return true;
 }
 
-// вытащить значение-подстроку (объект { ... } или массив [ ... ]) по ключу
-static bool extractJsonValueField(const std::string& json,
-                                  const std::string& key,
-                                  std::string& out)
+// поиск строки для бд
+static bool extractJsonValueField(const string& json, const string& key, string& out) 
 {
-    std::string pattern = "\"" + key + "\"";
-    std::size_t pos = json.find(pattern);
-    if (pos == std::string::npos)
+    string pattern = "\"" + key + "\"";
+    size_t pos = json.find(pattern);
+    if (pos == string::npos)
     {
         return false;
     }
 
-    std::size_t colon = json.find(':', pos + pattern.size());
-    if (colon == std::string::npos)
+    size_t colon = json.find(':', pos + pattern.size());
+    if (colon == string::npos)
     {
         return false;
     }
 
-    std::size_t start =
-        json.find_first_not_of(" \t\n\r", colon + 1);
-    if (start == std::string::npos)
+    size_t start = json.find_first_not_of(" \t\n\r", colon + 1); // ищем начало значения
+    if (start == string::npos)
     {
         return false;
     }
 
-    char c = json[start];
+    char c = json[start]; // первый символ значения
 
-    // объект { ... }
-    if (c == '{')
+    if (c == '{') 
     {
         int count = 0;
-        std::size_t i = start;
+        size_t i = start;
         bool found_end = false;
 
         while (i < json.size())
@@ -158,7 +144,7 @@ static bool extractJsonValueField(const std::string& json,
                 --count;
                 if (count == 0)
                 {
-                    ++i; // включаем '}'
+                    ++i; 
                     found_end = true;
                     break;
                 }
@@ -171,15 +157,14 @@ static bool extractJsonValueField(const std::string& json,
             return false;
         }
 
-        out = json.substr(start, i - start);
+        out = json.substr(start, i - start); // вынимаем объект
         return true;
     }
 
-    // массив [ ... ]
-    if (c == '[')
+    if (c == '[') 
     {
         int count = 0;
-        std::size_t i = start;
+        size_t i = start;
         bool found_end = false;
 
         while (i < json.size())
@@ -210,16 +195,14 @@ static bool extractJsonValueField(const std::string& json,
         return true;
     }
 
-    // другие случаи (число и т.п.) нам тут не нужны
     return false;
 }
 
 // разбор JSON-строки запроса в Request
-static bool parseJsonRequest(const std::string& line, Request& req)
+static bool parseJsonRequest(const string& line, Request& req)
 {
     req = Request{};
 
-    // обязательные поля: database, operation (строки)
     if (!extractJsonStringField(line, "database", req.database))
     {
         return false;
@@ -229,14 +212,13 @@ static bool parseJsonRequest(const std::string& line, Request& req)
         return false;
     }
 
-    // необязательные поля: data, query
-    std::string data_value;
+    string data_value;
     if (extractJsonValueField(line, "data", data_value))
     {
         req.data_json = data_value;
     }
 
-    std::string query_value;
+    string query_value;
     if (extractJsonValueField(line, "query", query_value))
     {
         req.query_json = query_value;
@@ -245,10 +227,10 @@ static bool parseJsonRequest(const std::string& line, Request& req)
     return true;
 }
 
-// экранировать строку для JSON
-static std::string escapeJsonString(const std::string& s)
+// подготовка JSON-строки из Response
+static string escapeJsonString(const string& s)
 {
-    std::string result;
+    string result;
     result.reserve(s.size() + 16);
 
     for (char c : s)
@@ -280,9 +262,9 @@ static std::string escapeJsonString(const std::string& s)
 }
 
 // сериализация Response в JSON
-static std::string serializeResponseToJson(const Response& resp)
+static string serializeResponseToJson(const Response& resp)
 {
-    std::string json;
+    string json;
     json.reserve(128 + resp.data.size());
 
     json += "{";
@@ -296,7 +278,7 @@ static std::string serializeResponseToJson(const Response& resp)
     json += "\",";
 
     json += "\"count\":";
-    json += std::to_string(resp.count);
+    json += to_string(resp.count);
     json += ",";
 
     // data — уже валидный JSON (обычно массив []), поэтому без кавычек
@@ -316,13 +298,10 @@ static std::string serializeResponseToJson(const Response& resp)
     return json;
 }
 
-// =========================
-// Поиск/создание DbEntry
-// =========================
 
-static DbEntry* getOrCreateDbEntry(const std::string& dbName)
+static DbEntry* getOrCreateDbEntry(const string& dbName) // получение или создание записи базы
 {
-    std::lock_guard<std::mutex> lock(g_dbListMutex);
+    lock_guard<mutex> lock(g_dbListMutex);
 
     // ищем уже существующую запись
     DbEntry* current = g_dbList;
@@ -335,7 +314,7 @@ static DbEntry* getOrCreateDbEntry(const std::string& dbName)
         current = current->next;
     }
 
-    // не нашли — создаём новую базу
+    // не нашли - создаём новую базу
     MiniDBMS* db = new MiniDBMS(dbName);
     db->loadFromDisk();
 
@@ -349,15 +328,13 @@ static DbEntry* getOrCreateDbEntry(const std::string& dbName)
     return entry;
 }
 
-// =========================
-// Обработка одного клиента
-// =========================
 
+// обработка клиента
 static void handleClient(int clientSock)
 {
-    std::string line;
+    string line; // буфер для чтения строк
 
-    while (readLine(clientSock, line))
+    while (readLine(clientSock, line)) // читаем запросы построчно
     {
         if (line.empty())
         {
@@ -367,14 +344,14 @@ static void handleClient(int clientSock)
         Request req;
         if (!parseJsonRequest(line, req))
         {
-            // Некорректный JSON-запрос → отправляем JSON-ошибку
+            // Некорректный JSON-запрос 
             Response resp;
             resp.status  = "error";
             resp.message = "Invalid request JSON format";
             resp.count   = 0;
             resp.data    = "[]";
 
-            std::string out = serializeResponseToJson(resp);
+            string out = serializeResponseToJson(resp);
             (void)writeAll(clientSock, out);
             continue;
         }
@@ -385,15 +362,15 @@ static void handleClient(int clientSock)
         Response resp;
         {
             // Блокируем КОНКРЕТНУЮ БД на время операции
-            std::lock_guard<std::mutex> dbLock(entry->mtx);
+            lock_guard<mutex> dbLock(entry->mtx);
             resp = processRequest(req, *entry->db);
         }
 
         // Сериализуем ответ в JSON и отправляем
-        std::string out = serializeResponseToJson(resp);
+        string out = serializeResponseToJson(resp);
         if (!writeAll(clientSock, out))
         {
-            // Ошибка отправки — выходим из цикла и закрываем сокет
+            // Ошибка отправки - выходим из цикла и закрываем сокет
             break;
         }
     }
@@ -401,81 +378,70 @@ static void handleClient(int clientSock)
     ::close(clientSock);
 }
 
-// =========================
-// main
-// =========================
 
 int main(int argc, char* argv[])
 {
-    if (argc < 3)
+    if (argc < 3) // порт и имя бд
     {
-        std::cerr << "Usage: " << argv[0]
+        cerr << "Usage: " << argv[0]
                   << " <port> <default_db_name>\n";
         return 1;
     }
 
-    int port = std::stoi(argv[1]);
-    std::string defaultDbName = argv[2];
+    int port = stoi(argv[1]);
+    string defaultDbName = argv[2];
 
     // заранее подгружаем дефолтную БД
     {
         DbEntry* entry = getOrCreateDbEntry(defaultDbName);
-        (void)entry;
+        (void)entry; // чтобы не было предупреждения
     }
 
-    int listenSock = ::socket(AF_INET, SOCK_STREAM, 0);
-    if (listenSock < 0)
+    int listenSock = ::socket(AF_INET, SOCK_STREAM, 0); // создаём слушающий сокет tcp
+    if (listenSock < 0) // ошибка
     {
-        std::perror("socket");
+        perror("socket"); // вывод ошибки
         return 1;
     }
 
-    int opt = 1;
-    ::setsockopt(listenSock, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
+    sockaddr_in addr{}; // заполняем адрес
+    addr.sin_family = AF_INET; // IPv4
+    addr.sin_addr.s_addr = INADDR_ANY; // слушаем на всех интерфейсах
+    addr.sin_port = htons(static_cast<uint16_t>(port)); // порт
 
-    sockaddr_in addr{};
-    addr.sin_family = AF_INET;
-    addr.sin_addr.s_addr = INADDR_ANY;
-    addr.sin_port = htons(static_cast<uint16_t>(port));
-
-    if (::bind(listenSock,
-               reinterpret_cast<sockaddr*>(&addr),
-               sizeof(addr)) < 0)
+    if (::bind(listenSock, reinterpret_cast<sockaddr*>(&addr), sizeof(addr)) < 0) // привязываем сокет к адресу
     {
-        std::perror("bind");
+        perror("bind");
         ::close(listenSock);
         return 1;
     }
 
-    if (::listen(listenSock, 16) < 0)
+    if (::listen(listenSock, 16) < 0) // начинаем слушать сокет макс 16
     {
-        std::perror("listen");
+        perror("listen");
         ::close(listenSock);
         return 1;
     }
 
-    std::cout << "Server listening on port " << port << std::endl;
+    cout << "Server listening on port " << port << endl;
 
-    while (true)
+    while (true) // ждем клиента 
     {
-        sockaddr_in clientAddr{};
-        socklen_t clientLen = sizeof(clientAddr);
+        sockaddr_in clientAddr{}; // адрес клиента
+        socklen_t clientLen = sizeof(clientAddr); // размер адреса
 
-        int clientSock =
-            ::accept(listenSock,
-                     reinterpret_cast<sockaddr*>(&clientAddr),
-                     &clientLen);
+        int clientSock = accept(listenSock, reinterpret_cast<sockaddr*>(&clientAddr), &clientLen); // принимаем подключение
 
-        if (clientSock < 0)
+        if (clientSock < 0) // ошибка
         {
-            std::perror("accept");
+            perror("accept"); // wait
             continue;
         }
 
-        std::thread t(handleClient, clientSock);
-        t.detach();
+        thread t(handleClient, clientSock); // создаем поток для обработки клиента
+        t.detach(); // отсоединяем поток
     }
 
-    ::close(listenSock);
+    close(listenSock);// закрываем слушающий сокет
     return 0;
 }

@@ -1,0 +1,5 @@
+./client --host 127.0.0.1 --port 8080 --database mydb
+INSERT {"name":"Bob"}
+ FIND {"age":{"$gt":20}}
+ DELETE {"name":"Alice"}
+ exit

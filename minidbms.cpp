@@ -1,15 +1,17 @@
 #include <iostream>
+#include <fstream>
+#include <sstream>
+
 #include "minidbms.h"
 #include "document.h"
-#include <fstream>
-#include <filesystem>
-#include <sstream>
 
 using namespace std;
 
 MiniDBMS::MiniDBMS(const string &db_name, const string &db_folder)
     : db_name(db_name), db_folder(db_folder), data_store(), next_id(1) {}
 MiniDBMS::~MiniDBMS() {} // у хэша есть свой тут не нужен
+
+
 
 string MiniDBMS::generate_id()
 {
@@ -68,9 +70,13 @@ void MiniDBMS::load()
     while (pos < content.size())
     {
         // пропускаем пробелы, табы, переводы строк, запятые
-        while (pos < content.size() && content[pos] == ' ' || content[pos] == '\t' || content[pos] == '\n' || content[pos] == '\r' || content[pos] == ',')
-        {
-            ++pos;
+        while (pos < content.size() &&
+        (content[pos] == ' ' ||
+        content[pos] == '\t' ||
+        content[pos] == '\n' ||
+        content[pos] == '\r' ||
+        content[pos] == ',')) {
+        ++pos;
         }
         if (pos >= content.size())
             break;
@@ -474,9 +480,13 @@ bool MiniDBMS::match_and_query(const Document *doc, const string &query_json)
     while (current_pos < content.length())
     {
         // пропускаем пробелы, табы и запятые
-        while (current_pos < content.length() && content[current_pos] == ' ' || content[current_pos] == '\t' || content[current_pos] == ',')
-        {
-            current_pos++;
+        while (current_pos < content.size() &&
+        (content[current_pos] == ' ' ||
+        content[current_pos] == '\t' ||
+        content[current_pos] == '\n' ||
+        content[current_pos] == '\r' ||
+        content[current_pos] == ',')) {
+        ++current_pos;
         }
         if (current_pos >= content.length())
             break;
@@ -804,12 +814,12 @@ void MiniDBMS::handle_insert(const string &query_json)
     cout << "SUCCESS: Document inserted. ID: " << new_id << endl;
 }
 
-// поиск документов по условию
-void MiniDBMS::handle_find(const string &query_json)
+void MiniDBMS::findQueryToStream(const string &query_json, ostream &out)
 {
     size_t found_count = 0;
-    cout << "INFO: Starting find query: " << query_json << endl;
+    out << "Результаты поиска:\n";
 
+    // проход по все бакетам
     for (size_t i = 0; i < data_store.getCapacity(); ++i)
     {
         ListNode *current = data_store.getBucketHead(i);
@@ -818,21 +828,64 @@ void MiniDBMS::handle_find(const string &query_json)
             Document *doc = current->value;
             if (match_document(doc, query_json))
             {
-                cout << doc->serialize() << endl;
+                out << doc->serialize() << "\n";
                 found_count++;
             }
             current = current->next;
         }
     }
 
-    cout << "SUCCESS: Found " << found_count << " document(s)." << endl;
+    out << "Найдено документов: " << found_count << "\n";
+}   
+
+void MiniDBMS::findQueryToJsonArray(const std::string& query_json,
+                                    std::string& out_array_json,
+                                    std::size_t& out_count) 
+{
+    std::string q = trim(query_json);
+    if (q.empty())
+    {
+        q = "{}";
+    }
+
+    out_array_json.clear();
+    out_array_json.push_back('[');
+
+    bool first = true;
+    out_count = 0U;
+
+    const std::size_t cap = data_store.getCapacity();
+    for (std::size_t i = 0; i < cap; ++i)
+    {
+        ListNode* node = data_store.getBucketHead(i);
+        while (node != nullptr)
+        {
+            Document* doc = node->value;
+            if (doc != nullptr && match_document(doc, q))
+            {
+                if (!first)
+                {
+                    out_array_json.push_back(',');
+                }
+                out_array_json += doc->serialize();
+                first = false;
+                ++out_count;
+            }
+            node = node->next;
+        }
+    }
+
+    out_array_json.push_back(']');
 }
 
-// удаление документов по условию
-void MiniDBMS::handle_delete(const string &query_json)
+// поиск документов по условию
+void MiniDBMS::handle_find(const string &query_json)
 {
+    findQueryToStream(query_json, cout);
+}
+
+size_t MiniDBMS::deleteQuery(const std::string &query_json){
     size_t deleted_count = 0;
-    cout << "INFO: Starting delete query: " << query_json << endl;
 
     myarray ids_to_delete;
 
@@ -863,8 +916,30 @@ void MiniDBMS::handle_delete(const string &query_json)
         }
     }
 
-    cout << "Документ удален " << deleted_count << endl;
+    return deleted_count;
 }
+// удаление документов по условию
+void MiniDBMS::handle_delete(const string &query_json)
+{
+    cout <<"INFO:Начало удаления документов...\n" <<query_json <<endl;
+    size_t deleted_count = deleteQuery(query_json);  
+    cout << "Документ удален:" << deleted_count << endl; 
+}
+
+void MiniDBMS::loadFromDisk(){
+    load();
+}
+
+void MiniDBMS::saveToDisk(){
+    save();
+}
+
+void MiniDBMS::insertQuery(const string &query_json){
+    handle_insert(query_json);
+}
+
+
+
 
 void MiniDBMS::run(const string &command, const string &query_json)
 {

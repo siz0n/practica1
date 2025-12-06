@@ -1,0 +1,7 @@
+[
+{"_id":"1","name":"Alice","age":"25","city":"Paris"},
+{"_id":"2","name":"Bob","age":"30","city":"London"},
+{"_id":"3","name":"Chris","age":"19","city":"Paris"},
+{"_id":"4","name":"David","age":"35","city":"Madrid"},
+{"_id":"5","name":"Eva","age":"22","city":"London","salary":"2500"}
+]

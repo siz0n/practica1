@@ -1,6 +1,7 @@
 #pragma once
 
 #include <string>
+#include <iosfwd>
 #include "custom_hashmap.h"
 #include "document.h"
 #include "utills.h"
@@ -34,5 +35,14 @@ private:
 public:
     MiniDBMS(const std::string &db_name, const std::string &db_folder = "mydb");
     ~MiniDBMS();
+
+    void loadFromDisk();
+    void saveToDisk();
+
+    void insertQuery(const std::string &query_json);
+    void findQueryToStream(const std::string &query_json, std::ostream &out);
+    std::size_t deleteQuery(const std::string &query_json);
+    void findQueryToJsonArray(const std::string& query_json, std::string& out_array_json, std::size_t& out_count);
+
     void run(const std::string &command, const std::string &query_json);
 };

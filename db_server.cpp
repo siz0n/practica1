@@ -6,6 +6,8 @@
 #include <netinet/in.h>
 #include <sys/socket.h>
 #include <unistd.h>
+#include <sys/time.h> // для struct timeval
+
 
 #include <cerrno>
 #include <csignal>
@@ -31,42 +33,79 @@ static mutex g_dbListMutex;
 
 
 // чтение строки до '\n'
-static bool readLine(int sock, string& out)
+static bool readLine(int sock, std::string& out)
 {
     out.clear();
-    char ch = 0; 
+    char ch = 0;
+
     while (true)
     {
-        ssize_t n = recv(sock, &ch, 1, 0); // читает сокет по 1 байту
-        if (n <= 0)
+        ssize_t n = ::recv(sock, &ch, 1, 0);
+
+        if (n < 0)
         {
+            if (errno == EWOULDBLOCK || errno == EAGAIN)
+            {
+                std::cerr << "[Server] recv timeout\n";
+            }
+            else
+            {
+                std::perror("[Server] recv error");
+            }
             return false;
         }
+
+        if (n == 0)
+        {
+            // Клиент закрыл соединение
+            return false;
+        }
+
         if (ch == '\n')
         {
             break;
         }
+
         out.push_back(ch);
     }
     return true;
 }
 
+
 // отправка всей строки
-static bool writeAll(int sock, const string& data)
+static bool writeAll(int sock, const std::string& data)
 {
     const char* buf = data.c_str();
     size_t total = data.size();
-    size_t sent = 0; // сколько уже отправлено
+    size_t sent = 0;
 
     while (sent < total)
     {
-        ssize_t n = send(sock, buf + sent, total - sent, 0);
-        if (n <= 0)
+        ssize_t n = ::send(sock, buf + sent, total - sent, 0);
+
+        if (n < 0)
         {
+            if (errno == EWOULDBLOCK || errno == EAGAIN)
+            {
+                std::cerr << "[Server] send timeout\n";
+            }
+            else
+            {
+                std::perror("[Server] send error");
+            }
             return false;
         }
+
+        if (n == 0)
+        {
+            // очень редкий случай, но на всякий:
+            std::cerr << "[Server] send returned 0\n";
+            return false;
+        }
+
         sent += static_cast<size_t>(n);
     }
+
     return true;
 }
 
@@ -427,20 +466,39 @@ int main(int argc, char* argv[])
 
     while (true) // ждем клиента 
     {
-        sockaddr_in clientAddr{}; // адрес клиента
-        socklen_t clientLen = sizeof(clientAddr); // размер адреса
+        sockaddr_in clientAddr{};
+        socklen_t clientLen = sizeof(clientAddr);
 
-        int clientSock = accept(listenSock, reinterpret_cast<sockaddr*>(&clientAddr), &clientLen); // принимаем подключение
+        int clientSock = ::accept(
+            listenSock,
+            reinterpret_cast<sockaddr*>(&clientAddr),
+            &clientLen
+        );
 
         if (clientSock < 0) // ошибка
         {
-            perror("accept"); // wait
+            perror("accept");
             continue;
         }
 
-        thread t(handleClient, clientSock); // создаем поток для обработки клиента
+        
+        struct timeval tv;
+        tv.tv_sec = 30;  
+        tv.tv_usec = 0;
+
+        if (::setsockopt(clientSock, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv)) < 0)
+        {
+            perror("setsockopt SO_RCVTIMEO");
+        }
+        if (::setsockopt(clientSock, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv)) < 0)
+        {
+            perror("setsockopt SO_SNDTIMEO");
+        }
+
+        std::thread t(handleClient, clientSock); // создаём поток для клиента
         t.detach(); // отсоединяем поток
     }
+
 
     close(listenSock);// закрываем слушающий сокет
     return 0;

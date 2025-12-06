@@ -3,6 +3,8 @@
 #include <cstdlib>
 #include <cctype>
 #include <algorithm>
+#include <sys/time.h> // для struct timeval
+
 
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -63,36 +65,73 @@ bool writeAll(int sock, const std::string& data)
 
     while (sent < total)
     {
-        ssize_t n = send(sock, buf + sent, total - sent, 0);
-        if (n <= 0)
+        ssize_t n = ::send(sock, buf + sent, total - sent, 0);
+
+        if (n < 0)
         {
+            if (errno == EWOULDBLOCK || errno == EAGAIN)
+            {
+                std::cerr << "[Client] send timeout\n";
+            }
+            else
+            {
+                std::perror("[Client] send error");
+            }
             return false;
         }
+
+        if (n == 0)
+        {
+            std::cerr << "[Client] send returned 0\n";
+            return false;
+        }
+
         sent += static_cast<std::size_t>(n);
     }
     return true;
 }
+
 
 // чтение одной строки до '\n'
 bool readLine(int sock, std::string& out)
 {
     out.clear();
     char ch = 0;
+
     while (true)
     {
-        ssize_t n = recv(sock, &ch, 1, 0);
-        if (n <= 0)
+        ssize_t n = ::recv(sock, &ch, 1, 0);
+
+        if (n < 0)
         {
+            if (errno == EWOULDBLOCK || errno == EAGAIN)
+            {
+                std::cerr << "[Client] recv timeout\n";
+            }
+            else
+            {
+                std::perror("[Client] recv error");
+            }
             return false;
         }
+
+        if (n == 0)
+        {
+            // сервер закрыл соединение
+            return false;
+        }
+
         if (ch == '\n')
         {
             break;
         }
+
         out.push_back(ch);
     }
+
     return true;
 }
+
 
 static bool buildJsonRequestFromCommand(const std::string& line, const std::string& database, std::string& outJson) // построение JSON-запроса из команды пользователя
 {
@@ -222,7 +261,20 @@ int main(int argc, char* argv[])
         perror("socket");
         return 1;
     }
+    // таймауты на операции recv/send — 5 секунд
+    struct timeval tv;
+    tv.tv_sec = 30;
+    tv.tv_usec = 0;
 
+    if (setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv)) < 0)
+    {
+        perror("setsockopt SO_RCVTIMEO");
+    }
+
+    if (setsockopt(sock, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv)) < 0)
+    {
+        perror("setsockopt SO_SNDTIMEO");
+    }
     // настраиваем адрес сервера
     sockaddr_in addr{};
     addr.sin_family = AF_INET; //

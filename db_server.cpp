@@ -7,6 +7,8 @@
 #include <sys/socket.h>
 #include <unistd.h>
 #include <sys/time.h> // для struct timeval
+#include <atomic>
+
 
 
 #include <cerrno>
@@ -29,10 +31,14 @@ struct DbEntry
 
 static DbEntry* g_dbList = nullptr;
 static mutex g_dbListMutex;
+// счетчик активных клиентов
+static std::atomic<int> g_activeClients{0};
+// максимально допустимое количество одновременно обслуживаемых клиентов
+static constexpr int MAX_CLIENTS = 16;
 
 
 
-// чтение строки до '\n'
+// чтение строки из сокета
 static bool readLine(int sock, std::string& out)
 {
     out.clear();
@@ -465,39 +471,60 @@ int main(int argc, char* argv[])
     cout << "Server listening on port " << port << endl;
 
     while (true) // ждем клиента 
+{
+    sockaddr_in clientAddr{};
+    socklen_t clientLen = sizeof(clientAddr);
+
+    int clientSock = ::accept(
+        listenSock,
+        reinterpret_cast<sockaddr*>(&clientAddr),
+        &clientLen
+    );
+
+    if (clientSock < 0) // ошибка accept
     {
-        sockaddr_in clientAddr{};
-        socklen_t clientLen = sizeof(clientAddr);
-
-        int clientSock = ::accept(
-            listenSock,
-            reinterpret_cast<sockaddr*>(&clientAddr),
-            &clientLen
-        );
-
-        if (clientSock < 0) // ошибка
-        {
-            perror("accept");
-            continue;
-        }
-
-        
-        struct timeval tv;
-        tv.tv_sec = 30;  
-        tv.tv_usec = 0;
-
-        if (::setsockopt(clientSock, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv)) < 0)
-        {
-            perror("setsockopt SO_RCVTIMEO");
-        }
-        if (::setsockopt(clientSock, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv)) < 0)
-        {
-            perror("setsockopt SO_SNDTIMEO");
-        }
-
-        std::thread t(handleClient, clientSock); // создаём поток для клиента
-        t.detach(); // отсоединяем поток
+        perror("accept");
+        continue;
     }
+
+    // проверяем, не превышен ли лимит активных клиентов
+    if (g_activeClients.load() >= MAX_CLIENTS)
+    {
+        std::cerr << "[Server] Too many clients (" << g_activeClients.load()
+                  << "), refusing new connection\n";
+        ::close(clientSock);
+        continue;
+    }
+
+    // увеличиваем счетчик активных клиентов
+    g_activeClients++;
+
+    // настраиваем таймауты для избежания зависаний recv/send
+    struct timeval tv;
+    tv.tv_sec = 5;  // 5 секунд
+    tv.tv_usec = 0;
+
+    /*if (::setsockopt(clientSock, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv)) < 0)
+    {
+        perror("setsockopt SO_RCVTIMEO");
+    }
+    if (::setsockopt(clientSock, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv)) < 0)
+    {
+        perror("setsockopt SO_SNDTIMEO");
+    }*/
+
+    // запускаем поток, который по завершении уменьшит счетчик активных клиентов
+    std::thread t(
+        [](int sock)
+        {
+            handleClient(sock);
+            g_activeClients--;
+        },
+        clientSock);
+
+    t.detach();
+}
+
 
 
     close(listenSock);// закрываем слушающий сокет

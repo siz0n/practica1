@@ -814,7 +814,7 @@ void MiniDBMS::insertQuery(const string &query_json)
     cout << "SUCCESS: Document inserted. ID: " << new_id << endl;
 }
 
-void MiniDBMS::findQueryToStream(const string &query_json, ostream &out)
+void MiniDBMS::findQueryToStream(const string &query_json, ostream &out) // вывод в поток
 {
     size_t found_count = 0;
     out << "Результаты поиска:\n";
@@ -838,7 +838,7 @@ void MiniDBMS::findQueryToStream(const string &query_json, ostream &out)
     out << "Найдено документов: " << found_count << "\n";
 }   
 
-void MiniDBMS::findQueryToJsonArray(const string& query_json, string& out_array_json, size_t& out_count) 
+void MiniDBMS::findQueryToJsonArray(const string& query_json, string& out_array_json, size_t& out_count) // вывод в JSON-массив
 {
     std::string q = trim(query_json);
     if (q.empty())
@@ -855,7 +855,7 @@ void MiniDBMS::findQueryToJsonArray(const string& query_json, string& out_array_
     const std::size_t cap = data_store.getCapacity();
     for (std::size_t i = 0; i < cap; ++i)
     {
-        ListNode* node = data_store.getBucketHead(i);
+        ListNode* node = data_store.getBucketHead(i); // проход по цепочке
         while (node != nullptr)
         {
             Document* doc = node->value;

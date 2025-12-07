@@ -16,95 +16,62 @@ Response processRequest(const Request& req, MiniDBMS& db)
     try
     {
         if (req.operation == "insert")
+{
+    Response resp;
+    resp.status  = "success";
+    resp.message = "Документы добавлены";
+    resp.data    = "[]";
+    resp.count   = 0;
+
+    std::string docs = !req.data_json.empty() ? req.data_json : req.query_json;
+    std::string trimmed = trim(docs);
+
+    if (trimmed.empty())
+    {
+        resp.status  = "error";
+        resp.message = "Пустой JSON-документ";
+        return resp;
+    }
+
+    if (trimmed.front() == '{')
+    {
+        db.insertQuery(trimmed);
+        resp.count = 1;
+    }
+    else if (trimmed.front() == '[')
+    {
+        size_t pos = 0;
+        while (pos < trimmed.size())
         {
-            string docs = req.data_json.empty() ? req.query_json : req.data_json;
-            string trimmed = trim(docs);
+            size_t s = trimmed.find('{', pos);
+            if (s == std::string::npos) break;
 
-            if (trimmed.empty())
+            size_t cnt = 0;
+            size_t i = s;
+            do
             {
-                resp.status = "error";
-                resp.message = "Пустые данные для вставки (поле data/query пусто)";
-                return resp;
-            }
+                if (trimmed[i] == '{') ++cnt;
+                if (trimmed[i] == '}') --cnt;
+                ++i;
+            } while (i < trimmed.size() && cnt > 0);
 
-            if (trimmed.front() == '{')
-            {
-                db.insertQuery(trimmed);
-                db.saveToDisk();
+            std::string obj = trimmed.substr(s, i - s);
+            db.insertQuery(obj);
+            ++resp.count;
 
-                resp.status = "success";
-                resp.message = "Документ добавлен";
-                resp.count = 1;
-            }
-
-            else if (trimmed.front() == '[')
-            {
-                size_t pos = 0;
-                size_t inserted = 0;
-
-                while (pos < trimmed.size())
-                {
-                    // ищем начало объекта
-                    size_t start_obj = trimmed.find('{', pos);
-                    if (start_obj == string::npos)
-                    {
-                        break;
-                    }
-
-                    int bracket_count = 0;
-                    bool found_end = false;
-                    size_t i = start_obj;
-
-                    while (i < trimmed.size())
-                    {
-                        if (trimmed[i] == '{')
-                        {
-                            ++bracket_count;
-                        }
-                        else if (trimmed[i] == '}')
-                        {
-                            --bracket_count;
-                            if (bracket_count == 0)
-                            {
-                                ++i; // включаем '}'
-                                found_end = true;
-                                break;
-                            }
-                        }
-                        ++i;
-                    }
-
-                    if (!found_end)
-                    {
-                        break;
-                    }
-
-                    string obj_str = trimmed.substr(start_obj, i - start_obj);
-                    obj_str = trim(obj_str);
-
-                    if (!obj_str.empty())
-                    {
-                        db.insertQuery(obj_str);
-                        ++inserted;
-                    }
-
-                    pos = i;
-                }
-
-                db.saveToDisk();
-
-                resp.status  = "success";
-                resp.message = "Документы добавлены";
-                resp.count   = inserted;
-                resp.data = "[]";
-            }
-            else
-            {
-                resp.status  = "error";
-                resp.message = "Неверный формат данных для insert (ожидался { } или [ ])";
-            }
+            pos = i;
         }
+    }
+    else
+    {
+        resp.status  = "error";
+        resp.message = "INSERT ожидает объект {} или массив []";
+        return resp;
+    }
 
+    db.saveToDisk();
+    return resp;
+}
         else if (req.operation == "find")
         {
             string query = req.query_json;

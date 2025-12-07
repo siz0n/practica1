@@ -261,12 +261,12 @@ int main(int argc, char* argv[])
         perror("socket");
         return 1;
     }
-    // таймауты на операции recv/send — 5 секунд
+    
     struct timeval tv;
     tv.tv_sec = 30;
     tv.tv_usec = 0;
 
-    if (setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv)) < 0)
+    /*if (setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv)) < 0)
     {
         perror("setsockopt SO_RCVTIMEO");
     }
@@ -274,7 +274,7 @@ int main(int argc, char* argv[])
     if (setsockopt(sock, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv)) < 0)
     {
         perror("setsockopt SO_SNDTIMEO");
-    }
+    }*/
     // настраиваем адрес сервера
     sockaddr_in addr{};
     addr.sin_family = AF_INET; //
